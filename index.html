@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>BUMORE 聖誕衝刺 - 贏取優惠券</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700&display=swap');
+        
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            overflow: hidden; /* Prevent scrolling */
+            touch-action: none; /* Disable browser zooming/scrolling gestures */
+            background-color: #0f172a; 
+            margin: 0;
+            padding: 0;
+            width: 100vw;
+            height: 100vh;
+        }
+        
+        /* Game Container fills the screen */
+        #gameContainer {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+
+        #gameCanvas {
+            background: linear-gradient(to bottom, #0f172a 0%, #1e293b 100%);
+            /* Ground line will be drawn by canvas now to handle resizing better */
+        }
+
+        .pixel-font {
+            font-family: 'Courier New', Courier, monospace;
+            font-weight: bold;
+        }
+
+        .scanlines {
+            background: linear-gradient(
+                to bottom,
+                rgba(255,255,255,0),
+                rgba(255,255,255,0) 50%,
+                rgba(0,0,0,0.1) 50%,
+                rgba(0,0,0,0.1)
+            );
+            background-size: 100% 4px;
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .coupon-border {
+            border: 3px dashed #166534; 
+            background-color: #f0fdf4; 
+        }
+
+        /* Snowflakes */
+        .snowflake {
+            position: absolute;
+            color: #fff;
+            font-size: 1em;
+            font-family: Arial;
+            text-shadow: 0 0 1px #000;
+            z-index: 5;
+            pointer-events: none;
+        }
+
+        @-webkit-keyframes snowflakes-fall{0%{top:-10%}100%{top:100%}}@-webkit-keyframes snowflakes-shake{0%{-webkit-transform:translateX(0px);transform:translateX(0px)}50%{-webkit-transform:translateX(80px);transform:translateX(80px)}100%{-webkit-transform:translateX(0px);transform:translateX(0px)}}@keyframes snowflakes-fall{0%{top:-10%}100%{top:100%}}@keyframes snowflakes-shake{0%{transform:translateX(0px)}50%{transform:translateX(80px)}100%{transform:translateX(0px)}}.snowflake{position:fixed;top:-10%;z-index:9999;-webkit-user-select:none;-moz-user-select:none;-ms-user-select:none;user-select:none;cursor:default;-webkit-animation-name:snowflakes-fall,snowflakes-shake;-webkit-animation-duration:10s,3s;-webkit-animation-timing-function:linear,ease-in-out;-webkit-animation-iteration-count:infinite,infinite;-webkit-animation-play-state:running,running;animation-name:snowflakes-fall,snowflakes-shake;animation-duration:10s,3s;animation-timing-function:linear,ease-in-out;animation-iteration-count:infinite,infinite;animation-play-state:running,running}.snowflake:nth-of-type(0){left:1%;-webkit-animation-delay:0s,0s;animation-delay:0s,0s}.snowflake:nth-of-type(1){left:10%;-webkit-animation-delay:1s,1s;animation-delay:1s,1s}.snowflake:nth-of-type(2){left:20%;-webkit-animation-delay:6s,.5s;animation-delay:6s,.5s}.snowflake:nth-of-type(3){left:30%;-webkit-animation-delay:4s,2s;animation-delay:4s,2s}.snowflake:nth-of-type(4){left:40%;-webkit-animation-delay:2s,2s;animation-delay:2s,2s}.snowflake:nth-of-type(5){left:50%;-webkit-animation-delay:8s,3s;animation-delay:8s,3s}.snowflake:nth-of-type(6){left:60%;-webkit-animation-delay:6s,2s;animation-delay:6s,2s}.snowflake:nth-of-type(7){left:70%;-webkit-animation-delay:2.5s,1s;animation-delay:2.5s,1s}.snowflake:nth-of-type(8){left:80%;-webkit-animation-delay:1s,0s;animation-delay:1s,0s}.snowflake:nth-of-type(9){left:90%;-webkit-animation-delay:3s,1.5s;animation-delay:3s,1.5s}
+    </style>
+</head>
+<body>
+
+    <!-- Falling Snow -->
+    <div class="snowflake">❄</div><div class="snowflake">❅</div><div class="snowflake">❆</div>
+    <div class="snowflake">❄</div><div class="snowflake">❅</div><div class="snowflake">❆</div>
+    <div class="snowflake">❄</div><div class="snowflake">❅</div><div class="snowflake">❆</div>
+
+    <!-- Game Container (Full Screen) -->
+    <div id="gameContainer">
+        
+        <!-- Brand Display (Responsive Size) -->
+        <div class="absolute top-8 left-0 right-0 z-20 text-center pointer-events-none px-4">
+            <h1 class="text-3xl md:text-5xl font-bold pixel-font tracking-widest text-yellow-400 drop-shadow-[0_0_10px_rgba(250,204,21,0.8)]" 
+                style="-webkit-text-stroke: 1px #b45309; text-shadow: 3px 3px 0px #000;">
+                BUYMORE.HK
+            </h1>
+        </div>
+
+        <!-- Score Display -->
+        <div class="absolute top-4 right-4 text-xl md:text-2xl font-bold text-white z-20 pixel-font drop-shadow-lg">
+            SCORE: <span id="scoreText">0</span>
+        </div>
+
+        <!-- Canvas -->
+        <canvas id="gameCanvas" class="w-full h-full block"></canvas>
+        <div class="scanlines"></div>
+
+        <!-- Start Screen Overlay -->
+        <div id="startScreen" class="absolute inset-0 bg-black/80 flex flex-col items-center justify-center z-30 text-white p-6 text-center">
+            <h2 class="text-3xl md:text-5xl font-bold mb-4 text-green-400 pixel-font tracking-widest drop-shadow-[0_2px_2px_rgba(220,38,38,0.8)]">
+                BUMORE<br>聖誕衝刺
+            </h2>
+            <p class="mb-6 text-base md:text-lg text-gray-300 max-w-md">
+                幫助聖誕老人前往未來科技門市！<br>
+                選擇您的挑戰難度：
+            </p>
+            
+            <div class="flex flex-col md:flex-row gap-4 mb-8 w-full max-w-lg justify-center">
+                <button id="startBtn20" class="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-4 px-6 rounded-xl text-lg transition transform hover:scale-105 shadow-lg border-2 border-green-400">
+                    <div>挑戰 $20 優惠券</div>
+                    <div class="text-xs opacity-75 mt-1">一般難度</div>
+                </button>
+                <button id="startBtn50" class="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-4 px-6 rounded-xl text-lg transition transform hover:scale-105 shadow-lg animate-pulse border-2 border-red-400">
+                    <div>挑戰 $50 優惠券</div>
+                    <div class="text-xs opacity-75 mt-1">困難模式 🔥</div>
+                </button>
+            </div>
+
+            <div class="bg-gray-800/80 p-4 rounded-lg border border-gray-600 max-w-sm w-full">
+                <h3 class="text-yellow-400 font-bold mb-2 text-sm pixel-font">獎勵說明：</h3>
+                <ul class="text-sm text-gray-300 text-left space-y-2 list-none">
+                    <li class="flex items-center">
+                        <span class="text-green-400 mr-2">🎫</span>
+                        優惠劵$20 <span class="text-gray-400 text-xs ml-1">(需消費滿$200)</span>
+                    </li>
+                    <li class="flex items-center">
+                        <span class="text-red-400 mr-2">🎫</span>
+                        優惠劵$50 <span class="text-gray-400 text-xs ml-1">(需消費滿$1000)</span>
+                    </li>
+                </ul>
+            </div>
+
+            <p class="mt-6 text-sm text-gray-400">點擊螢幕任意位置跳躍</p>
+        </div>
+
+        <!-- Game Over Overlay -->
+        <div id="gameOverScreen" class="hidden absolute inset-0 bg-black/80 flex flex-col items-center justify-center z-30 text-white p-6 text-center">
+            <h2 class="text-4xl font-bold mb-4 text-red-500 pixel-font">GAME OVER</h2>
+            <p class="mb-6 text-gray-300">哎呀！禮物沒送到。<br>再試一次吧！</p>
+            <button id="restartBtn" class="bg-white text-gray-900 hover:bg-gray-200 font-bold py-3 px-8 rounded-full text-lg transition">
+                回到主畫面
+            </button>
+        </div>
+
+        <!-- Win / Coupon Form Overlay -->
+        <div id="winScreen" class="hidden absolute inset-0 bg-black/90 flex flex-col items-center justify-center z-40 p-4 overflow-y-auto">
+            <div class="bg-white rounded-xl p-6 md:p-8 max-w-md w-full text-center shadow-2xl transform transition-all scale-100 border-4 border-green-700 relative my-auto">
+                
+                <!-- Decorative Ribbon -->
+                <div class="absolute -top-10 -left-10 w-20 h-20 bg-red-600 rotate-45 z-0"></div>
+                <div class="absolute -top-10 -right-10 w-20 h-20 bg-red-600 -rotate-45 z-0"></div>
+                
+                <div class="text-green-600 text-5xl mb-2 relative z-10">🎄</div>
+                <h2 class="text-2xl md:text-3xl font-bold text-gray-800 mb-2 relative z-10">恭喜抵達未來科技!</h2>
+                <p class="text-gray-600 mb-6 text-sm md:text-base relative z-10">聖誕老人成功送達！這是您的聖誕禮物！</p>
+                
+                <!-- Coupon Display (Locked) -->
+                <div id="couponLocked" class="coupon-border p-4 md:p-6 rounded-lg mb-6 relative overflow-hidden z-10 bg-green-50">
+                    <div class="font-bold text-green-800 text-xl md:text-2xl">BUMORE 聖誕優惠券 <span id="winAmountLocked">$20</span></div>
+                    <div class="text-sm text-gray-600 mt-2">請輸入資料解鎖代碼</div>
+                    <div class="absolute inset-0 backdrop-blur-[3px] bg-white/40 flex items-center justify-center">
+                        <span class="bg-gray-800 text-white text-sm px-4 py-2 rounded-full shadow-lg font-bold">🔒 鎖定中</span>
+                    </div>
+                </div>
+
+                <!-- Input Form -->
+                <form id="claimForm" class="space-y-4 relative z-10">
+                    <div class="text-left">
+                        <label class="block text-sm font-bold text-gray-700 mb-2">輸入您的 IG 或 Facebook 名稱</label>
+                        <input type="text" id="socialHandle" required placeholder="@yourname" class="w-full border-2 border-gray-300 px-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-gray-800 text-lg">
+                    </div>
+                    <button type="submit" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-lg transition border-b-4 border-red-800 text-lg md:text-xl shadow-lg active:scale-95">
+                        領取聖誕優惠
+                    </button>
+                </form>
+
+                <!-- Success Message (Hidden by default) -->
+                <div id="successMessage" class="hidden mt-4 relative z-10">
+                    <div class="coupon-border p-4 rounded bg-red-50 border-red-600 relative">
+                        <div class="absolute -top-3 -right-2 text-2xl">🌿</div>
+                        <p class="text-sm font-bold text-gray-700 mb-1">專屬於：<span id="userNameDisplay" class="text-red-600 break-all"></span></p>
+                        
+                        <p class="text-2xl md:text-3xl font-bold text-green-700 tracking-wider mt-2 select-all">優惠劵<span id="finalAmount">$20</span></p>
+                        <p id="minSpendText" class="text-xs md:text-sm text-red-600 font-bold mt-1">*(需購買滿$200)</p>
+                        
+                        <p class="text-[10px] text-gray-500 mt-2">請截圖此畫面並在結帳時出示</p>
+                    </div>
+
+                    <!-- Terms and Conditions -->
+                    <div class="mt-3 text-left bg-gray-50 p-3 rounded-md border border-gray-200">
+                        <p class="text-xs font-bold text-gray-700 mb-1">使用條款：</p>
+                        <ul class="text-[10px] text-gray-500 list-disc list-inside space-y-0.5">
+                            <li>優惠劵有效期為領取後2025/12/31前使用。</li>
+                            <li id="termMinSpend">單筆消費滿$200方可使用此優惠。</li>
+                            <li>不可與其他優惠同時使用。</li>
+                            <li>每個用戶只限使用一次。</li>
+                            <li>如有爭議，BUYMORE.HK 保留最終決定權。</li>
+                        </ul>
+                    </div>
+                    <p class="text-green-600 font-bold mt-3 text-sm">資料已送出！聖誕快樂！</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Game Config ---
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreEl = document.getElementById('scoreText');
+        
+        // UI Elements
+        const startScreen = document.getElementById('startScreen');
+        const gameOverScreen = document.getElementById('gameOverScreen');
+        const winScreen = document.getElementById('winScreen');
+        const startBtn20 = document.getElementById('startBtn20');
+        const startBtn50 = document.getElementById('startBtn50');
+        const restartBtn = document.getElementById('restartBtn');
+        const claimForm = document.getElementById('claimForm');
+        const couponLocked = document.getElementById('couponLocked');
+        const winAmountLocked = document.getElementById('winAmountLocked');
+        const successMessage = document.getElementById('successMessage');
+        const userNameDisplay = document.getElementById('userNameDisplay');
+        const finalAmount = document.getElementById('finalAmount');
+        const minSpendText = document.getElementById('minSpendText');
+        const termMinSpend = document.getElementById('termMinSpend');
+
+        // Game State
+        let isGameRunning = false;
+        let animationId;
+        let score = 0;
+        let gameSpeed = 6;
+        let frames = 0;
+        let obstacles = [];
+        let clouds = [];
+        
+        // Mode Settings
+        let currentMode = 20; // 20 or 50
+        let winScore = 750; 
+        
+        let shopAppeared = false;
+        let shopX = null;
+        let groundHeight = 50; 
+
+        // Resize Canvas Logic for Full Screen
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            groundHeight = Math.max(50, window.innerHeight * 0.1); 
+            
+            if (!isGameRunning) {
+                ctx.fillStyle = '#0f172a'; 
+                ctx.fillRect(0,0, canvas.width, canvas.height);
+            }
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // Player Object
+        const player = {
+            x: 50,
+            y: 0, 
+            width: 44,
+            height: 50,
+            dy: 0,
+            jumpForce: 14, 
+            grounded: false,
+            gravity: 0.7 
+        };
+
+        // --- Core Game Functions ---
+
+        function initGame(mode) {
+            currentMode = mode;
+            resizeCanvas(); 
+            isGameRunning = true;
+            score = 0;
+            frames = 0;
+            obstacles = [];
+            clouds = [];
+            shopAppeared = false;
+            shopX = null;
+            
+            // Difficulty Settings
+            if (currentMode === 50) {
+                gameSpeed = 7.5; // Faster start (Adjusted: was 8.5)
+                winScore = 1000; // Longer run for $50 (Adjusted: was 1200)
+            } else {
+                gameSpeed = 6;
+                winScore = 750;
+            }
+
+            // Set player start position
+            player.y = canvas.height - groundHeight - player.height;
+            player.dy = 0;
+            
+            scoreEl.innerText = score;
+            startScreen.classList.add('hidden');
+            gameOverScreen.classList.add('hidden');
+            winScreen.classList.add('hidden');
+            
+            for(let i=0; i<6; i++) spawnCloud(Math.random() * canvas.width);
+            animate();
+        }
+
+        function jump() {
+            if (player.grounded && isGameRunning) {
+                player.dy = -player.jumpForce;
+                player.grounded = false;
+            }
+        }
+
+        // --- Spawners ---
+
+        function spawnObstacle() {
+            if (shopAppeared) return;
+
+            const type = Math.random() > 0.5 ? 'tree' : 'gift';
+            
+            let width, height, color;
+            if (type === 'tree') {
+                width = 30;
+                height = 50 + Math.random() * 20;
+                color = '#166534'; 
+            } else { 
+                width = 35;
+                height = 35;
+                color = Math.random() > 0.5 ? '#dc2626' : '#16a34a'; 
+            }
+
+            obstacles.push({
+                x: canvas.width,
+                y: canvas.height - groundHeight - height,
+                width: width,
+                height: height,
+                type: type,
+                color: color
+            });
+        }
+
+        function spawnCloud(startX) {
+            clouds.push({
+                x: startX || canvas.width,
+                y: Math.random() * (canvas.height * 0.6), 
+                radius: 1 + Math.random() * 2,
+                speed: 0.2 + Math.random() * 0.3
+            });
+        }
+
+        // --- Drawing Helpers ---
+
+        function drawGround() {
+            ctx.fillStyle = '#cbd5e1'; 
+            ctx.fillRect(0, canvas.height - groundHeight, canvas.width, groundHeight);
+            ctx.fillStyle = '#94a3b8';
+            ctx.fillRect(0, canvas.height - groundHeight, canvas.width, 4);
+        }
+
+        function drawPlayer() {
+            const x = player.x;
+            const y = player.y;
+
+            // Santa Sprite logic
+            ctx.fillStyle = '#dc2626'; 
+            ctx.fillRect(x + 6, y + 18, 32, 22); 
+            ctx.fillRect(x + 10, y + 40, 10, 10); 
+            ctx.fillRect(x + 24, y + 40, 10, 10); 
+
+            ctx.fillStyle = '#1f2937'; 
+            ctx.fillRect(x + 8, y + 46, 12, 4);
+            ctx.fillRect(x + 24, y + 46, 12, 4);
+
+            ctx.fillStyle = '#1f2937'; 
+            ctx.fillRect(x + 6, y + 28, 32, 6);
+            ctx.fillStyle = '#fbbf24'; 
+            ctx.fillRect(x + 18, y + 28, 8, 6);
+
+            ctx.fillStyle = '#fecaca'; 
+            ctx.fillRect(x + 12, y + 6, 20, 16); 
+            ctx.fillStyle = 'white'; 
+            ctx.fillRect(x + 8, y + 18, 28, 12); 
+            ctx.fillRect(x + 6, y + 18, 32, 4); 
+            ctx.fillRect(x + 6, y + 38, 32, 4); 
+
+            ctx.fillStyle = '#dc2626'; 
+            ctx.fillRect(x + 12, y, 20, 8); 
+            ctx.fillRect(x + 16, y - 6, 12, 6); 
+            ctx.fillStyle = 'white'; 
+            ctx.fillRect(x + 10, y + 6, 24, 4); 
+            ctx.fillRect(x + 26, y - 8, 6, 6); 
+
+            ctx.fillStyle = '#1f2937'; 
+            ctx.fillRect(x + 26, y + 12, 4, 4); 
+
+             ctx.fillStyle = '#92400e'; 
+             ctx.fillRect(x - 8, y + 14, 12, 24);
+        }
+
+        function drawObstacle(obs) {
+            if (obs.type === 'tree') {
+                ctx.fillStyle = '#451a03'; 
+                ctx.fillRect(obs.x + obs.width/2 - 5, obs.y + obs.height - 10, 10, 10);
+                
+                ctx.fillStyle = obs.color; 
+                ctx.beginPath();
+                ctx.moveTo(obs.x + obs.width/2, obs.y);
+                ctx.lineTo(obs.x, obs.y + obs.height - 10);
+                ctx.lineTo(obs.x + obs.width, obs.y + obs.height - 10);
+                ctx.fill();
+
+                if (frames % 20 < 10) ctx.fillStyle = '#fbbf24'; else ctx.fillStyle = '#dc2626';
+                ctx.beginPath(); ctx.arc(obs.x + 10, obs.y + 20, 3, 0, Math.PI*2); ctx.fill();
+                if (frames % 20 >= 10) ctx.fillStyle = '#fbbf24'; else ctx.fillStyle = '#3b82f6';
+                ctx.beginPath(); ctx.arc(obs.x + 20, obs.y + 35, 3, 0, Math.PI*2); ctx.fill();
+
+            } else {
+                ctx.fillStyle = obs.color;
+                ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
+                
+                ctx.fillStyle = '#fbbf24'; 
+                ctx.fillRect(obs.x + obs.width/2 - 3, obs.y, 6, obs.height); 
+                ctx.fillRect(obs.x, obs.y + obs.height/2 - 3, obs.width, 6); 
+            }
+        }
+
+        function drawShop() {
+            if (shopX === null) return;
+            
+            ctx.fillStyle = '#991b1b'; 
+            const shopW = 160;
+            const shopH = 130;
+            const shopY = canvas.height - groundHeight - shopH;
+            
+            ctx.fillRect(shopX, shopY, shopW, shopH);
+            
+            ctx.fillStyle = 'white';
+            ctx.beginPath();
+            ctx.moveTo(shopX - 15, shopY + 5);
+            ctx.lineTo(shopX + shopW/2, shopY - 50);
+            ctx.lineTo(shopX + shopW + 15, shopY + 5);
+            ctx.lineTo(shopX + shopW + 15, shopY + 15);
+            for(let i=shopW+15; i>=-15; i-=10) {
+                 ctx.lineTo(shopX + i, shopY + 15 + (i%20===0 ? 5 : 0));
+            }
+            ctx.fill();
+            
+            ctx.fillStyle = '#7f1d1d'; 
+            ctx.beginPath();
+            ctx.moveTo(shopX - 10, shopY);
+            ctx.lineTo(shopX + shopW/2, shopY - 45);
+            ctx.lineTo(shopX + shopW + 10, shopY);
+            ctx.fill();
+
+            ctx.fillStyle = '#451a03'; 
+            ctx.fillRect(shopX + 55, shopY + 65, 50, 65);
+            ctx.fillStyle = '#166534'; ctx.beginPath(); ctx.arc(shopX + 80, shopY + 95, 15, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = '#dc2626'; ctx.beginPath(); ctx.arc(shopX + 80, shopY + 90, 3, 0, Math.PI*2); ctx.fill(); 
+
+            ctx.fillStyle = '#166534'; 
+            ctx.fillRect(shopX + 10, shopY + 20, shopW - 20, 35);
+            ctx.fillStyle = frames % 30 < 15 ? '#fbbf24' : '#ef4444';
+            for(let i=15; i<shopW-15; i+=15) {
+                 ctx.beginPath(); ctx.arc(shopX + i, shopY + 18, 3, 0, Math.PI*2); ctx.fill();
+                 ctx.beginPath(); ctx.arc(shopX + i, shopY + 57, 3, 0, Math.PI*2); ctx.fill();
+            }
+
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 20px "Noto Sans TC", sans-serif'; 
+            ctx.textAlign = 'center';
+            ctx.fillText('未來科技', shopX + shopW/2, shopY + 45); 
+        }
+
+        function drawClouds() {
+            ctx.fillStyle = 'white';
+            clouds.forEach(cloud => {
+                ctx.beginPath();
+                ctx.arc(cloud.x, cloud.y, cloud.radius, 0, Math.PI * 2);
+                ctx.fill();
+            });
+        }
+
+        // --- Main Loop ---
+
+        function animate() {
+            if (!isGameRunning) return;
+
+            animationId = requestAnimationFrame(animate);
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            gradient.addColorStop(0, '#0f172a');
+            gradient.addColorStop(1, '#1e293b');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0,0, canvas.width, canvas.height);
+
+            drawGround();
+
+            frames++;
+
+            if (frames % 100 === 0) spawnCloud(); 
+            clouds.forEach((cloud, index) => {
+                cloud.x -= cloud.speed;
+                if (cloud.x + cloud.radius < 0) clouds.splice(index, 1);
+            });
+            drawClouds();
+
+            // Physics
+            player.dy += player.gravity;
+            player.y += player.dy;
+
+            const floorY = canvas.height - groundHeight - player.height;
+            if (player.y > floorY) {
+                player.y = floorY;
+                player.dy = 0;
+                player.grounded = true;
+            } else {
+                player.grounded = false;
+            }
+
+            drawPlayer();
+
+            if (!shopAppeared && score >= winScore) {
+                shopAppeared = true;
+                shopX = canvas.width + 100; 
+                obstacles = [];
+            }
+
+            // Adjust Spawn Rate based on Difficulty
+            let spawnRate = 90; 
+            if (currentMode === 50) {
+                // Harder mode spawn rates - Adjusted to be less brutal
+                spawnRate = 75; // Start faster (was 60)
+                if (gameSpeed > 10) spawnRate = 55; // Very dense (was 45)
+                if (gameSpeed > 12) spawnRate = 45; // Extreme (was 35)
+            } else {
+                // Normal mode
+                if (gameSpeed > 8) spawnRate = 70; 
+                if (gameSpeed > 10) spawnRate = 50;
+            }
+
+            if (!shopAppeared && frames % spawnRate === 0) { 
+                if (Math.random() > 0.15) spawnObstacle(); 
+            }
+
+            // Speed Increase
+            if (frames % 300 === 0 && gameSpeed < 14) gameSpeed += 0.5;
+
+            if (shopAppeared) {
+                shopX -= gameSpeed;
+                drawShop();
+
+                if (player.x + player.width >= shopX + 80) {
+                    winGame();
+                }
+            }
+
+            obstacles.forEach((obs, index) => {
+                obs.x -= gameSpeed;
+                drawObstacle(obs);
+
+                if (
+                    player.x + 5 < obs.x + obs.width &&
+                    player.x + player.width - 5 > obs.x &&
+                    player.y + 5 < obs.y + obs.height &&
+                    player.y + player.height > obs.y
+                ) {
+                    gameOver();
+                }
+
+                if (obs.x + obs.width < 0) {
+                    obstacles.splice(index, 1);
+                }
+            });
+
+            if (!shopAppeared && frames % 5 === 0) {
+                score++;
+                scoreEl.innerText = score;
+            }
+        }
+
+        // --- Game Flow Control ---
+
+        function gameOver() {
+            isGameRunning = false;
+            cancelAnimationFrame(animationId);
+            gameOverScreen.classList.remove('hidden');
+        }
+
+        function winGame() {
+            isGameRunning = false;
+            cancelAnimationFrame(animationId);
+            
+            // Setup Win Screen based on Mode
+            const amount = currentMode === 50 ? "$50" : "$20";
+            const minSpend = currentMode === 50 ? "$1000" : "$200";
+
+            winAmountLocked.textContent = amount;
+            finalAmount.textContent = amount;
+            minSpendText.textContent = `*(需購買滿${minSpend})`;
+            termMinSpend.textContent = `單筆消費滿${minSpend}方可使用此優惠。`;
+
+            winScreen.classList.remove('hidden');
+            successMessage.classList.add('hidden');
+            claimForm.classList.remove('hidden');
+            couponLocked.classList.remove('hidden');
+            document.getElementById('socialHandle').value = '';
+        }
+
+        // --- Event Listeners ---
+
+        function handleInput(e) {
+            if (e.type !== 'keydown') {
+                if (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT') return;
+            }
+            
+            if (e.code === 'Space' || e.type === 'touchstart' || e.type === 'mousedown') {
+                if (e.type === 'keydown') e.preventDefault();
+                
+                // If game not running, input does nothing unless it's on a button
+                if (isGameRunning) {
+                    jump();
+                }
+            }
+        }
+
+        window.addEventListener('keydown', handleInput);
+        window.addEventListener('touchstart', handleInput, {passive: false});
+        window.addEventListener('mousedown', handleInput);
+
+        // Mode Selection
+        startBtn20.addEventListener('click', (e) => { e.stopPropagation(); initGame(20); });
+        startBtn50.addEventListener('click', (e) => { e.stopPropagation(); initGame(50); });
+        
+        // Restart goes back to start screen to choose mode again
+        restartBtn.addEventListener('click', (e) => { 
+            e.stopPropagation(); 
+            startScreen.classList.remove('hidden');
+            gameOverScreen.classList.add('hidden');
+            resizeCanvas(); // Reset canvas
+        });
+
+        claimForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const handle = document.getElementById('socialHandle').value;
+            
+            if(handle.trim() === "") return;
+
+            console.log("Saving user:", handle);
+            userNameDisplay.textContent = handle;
+
+            claimForm.classList.add('hidden');
+            couponLocked.classList.add('hidden');
+            successMessage.classList.remove('hidden');
+        });
+
+    </script>
+</body>
+</html>
